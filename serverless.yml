@@ -28,3 +28,7 @@ package:
   patterns:
     - '!**'
     - 'src/**'
+
+custom:
+  pythonRequirements:
+    dockerizePip: true
