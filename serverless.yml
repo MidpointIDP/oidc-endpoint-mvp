@@ -24,6 +24,14 @@ functions:
           path: /authorize
           method: get
 
+  oidc_callback:
+    handler: src.oidc_callback.entry_point
+    memorySize: 1769
+    events:
+      - httpApi:
+          path: /callback
+          method: get
+
 package:
   patterns:
     - '!**'
