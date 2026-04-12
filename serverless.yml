@@ -16,7 +16,7 @@ provider:
     cors: true
 
 functions:
-  ping:
+  oidc_authorize:
     handler: src.oidc_authorize.entry_point
     memorySize: 1769
     events:
