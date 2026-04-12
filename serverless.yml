@@ -1,0 +1,30 @@
+# "org" ensures this Service is used with the correct Serverless Framework Access Key.
+org: firsttracks
+
+# "app" enables Serverless Framework Dashboard features and sharing them with other Services.
+app: midpoint-oidc-endpoint
+
+# "service" is the name of this project. This will also be added to your AWS resource names.
+service: midpoint
+
+provider:
+  name: aws
+  region: us-east-2
+  runtime: python3.14
+
+  httpApi:
+    cors: true
+
+functions:
+  ping:
+    handler: src.oidc_authorize.entry_point
+    memorySize: 1769
+    events:
+      - httpApi:
+          path: /authorize
+          method: get
+
+package:
+  patterns:
+    - '!**'
+    - 'src/**'
