@@ -16,20 +16,12 @@ provider:
     cors: true
 
 functions:
-  oidc_authorize:
-    handler: src.oidc_authorize.entry_point
+  oidc_callback_google:
+    handler: src.federated_idp.google.oauth_callback_entry_point
     memorySize: 1769
     events:
       - httpApi:
-          path: /authorize
-          method: get
-
-  oidc_callback:
-    handler: src.oidc_callback.entry_point
-    memorySize: 1769
-    events:
-      - httpApi:
-          path: /callback
+          path: /oauth2/idp/google/callback
           method: get
 
 package:

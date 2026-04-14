@@ -44,7 +44,7 @@ def _create_lambda_function_response(status_code: int,
     return return_struct
 
 
-def entry_point(event, _context):
+def oauth_callback_entry_point(event, _context):
     _logger.info("Invoked")
 
     # Make sure all required query string parameters were passed
@@ -61,4 +61,7 @@ def entry_point(event, _context):
     # Now we take the code and exchange it for ID/access tokens
 
     # Fake that out and return signed JWT ID and access tokens
-
+    return _create_lambda_function_response(
+        200,
+        event
+    )
