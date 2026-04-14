@@ -22,7 +22,7 @@ functions:
     events:
       - httpApi:
           path: /oauth2/idp/google/callback
-          method: get
+          method: post
 
 package:
   patterns:
