@@ -42,7 +42,24 @@ def _create_lambda_function_response(status_code: int,
 def oauth_callback_entry_point(event, _context):
     _logger.info("Invoked")
 
-    token="eyJhbGciOiJSUzI1NiIsImtpZCI6ImIzZDk1Yjk1ZmE0OGQxODBiODVmZmU4MDgyZmNmYTIxNzRiMDQ2NjciLCJ0eXAiOiJKV1QifQ.eyJpc3MiOiJodHRwczovL2FjY291bnRzLmdvb2dsZS5jb20iLCJhenAiOiIyNjM2NTk5NDcxOTEtZTBzcjhxZzJwbW9mZ2IxNWg1bGMxaWh1N2JobmkyNmouYXBwcy5nb29nbGV1c2VyY29udGVudC5jb20iLCJhdWQiOiIyNjM2NTk5NDcxOTEtZTBzcjhxZzJwbW9mZ2IxNWg1bGMxaWh1N2JobmkyNmouYXBwcy5nb29nbGV1c2VyY29udGVudC5jb20iLCJzdWIiOiIxMDE1MzU0NTA4Njk1NjMzMjAxNjEiLCJoZCI6InNpeGJ1Y2tzc29sdXRpb25zLmNvbSIsImVtYWlsIjoidGVycnkub3R0QHNpeGJ1Y2tzc29sdXRpb25zLmNvbSIsImVtYWlsX3ZlcmlmaWVkIjp0cnVlLCJuYmYiOjE3NzYxNjg5NDgsIm5hbWUiOiJUZXJyeSBPdHQiLCJwaWN0dXJlIjoiaHR0cHM6Ly9saDMuZ29vZ2xldXNlcmNvbnRlbnQuY29tL2EvQUNnOG9jSnN1amFnYUxHODB3UE9XaUFObl9BOFhwSktrbXpLT1MzY0x2SHVvaFF6dHFjeHhocz1zOTYtYyIsImdpdmVuX25hbWUiOiJUZXJyeSIsImZhbWlseV9uYW1lIjoiT3R0IiwiaWF0IjoxNzc2MTY5MjQ4LCJleHAiOjE3NzYxNzI4NDgsImp0aSI6ImRkYTljNmIwNzJmM2RmMzVhMjliMDhmMGRmMDg3YTRmNzc3ZDE0NzIifQ.GcPdDYyiTQ4xJ_wdNRg2hZGIiLJZZ_nzskFNg3Bapow8lipMuXaXgX44CFeDs7CH71YfYWON1jOY5Ab1V0DkUH_7ScdYaC2Q_opOQEf5sBQPvqWUZvNqE-_Qeck9WOr7QXBAJS7R70UaIRqS3eGNAoKbw61CcIVdfgALbdtyeX2pNkHYecWMwak2bFsUXB1l-DHo0hjPcKJaTNZcvgGGsuaXt8KSC-A_5j8el9-Kw0mNXtZq5c7H7gDNK9qKv16KXG2dDFcYeQHDWPeaPkmyycX_lsaQgDcEaGEXcm97jcJR--QfJG2NSVmAjfGJAxOPNjPDcVdOXlHe3jOM5KpQFw"
+    body: str = event['body']
+
+    _logger.info(f"Got request body: {body}")
+
+    # Let's b64 decode as they say
+    decode_body: str = base64.b64decode(body).decode('utf-8')
+    _logger.info(f"Base64 decoded body: {decode_body}")
+
+    # parse_qs returns lists of strings because headers can be duplicated, but we ignore that and
+    #   take the first assuming no dupes
+    parsed_dict_from_body: dict[str, str] = {k: v[0] for k, v in urllib.parse.parse_qs(decode_body).items()}
+
+    # return _create_lambda_function_response(
+    #     200,
+    #     parsed_dict_from_body,
+    # )
+
+    id_token: str = parsed_dict_from_body['credential']
 
     # 1. Get Google's Public Keys (JWKS)
     jwks_url = "https://www.googleapis.com/oauth2/v3/certs"
@@ -50,7 +67,7 @@ def oauth_callback_entry_point(event, _context):
     jwks = response.json()
 
     # 2. Extract Key ID (kid) from token header
-    unverified_header = jwt.get_unverified_header(token)
+    unverified_header = jwt.get_unverified_header(id_token)
     kid = unverified_header['kid']
 
     # 3. Find the matching key
@@ -64,7 +81,7 @@ def oauth_callback_entry_point(event, _context):
         200,
         {
             "decoded_token": jwt.decode(
-                token,
+                id_token,
                 jwt.algorithms.RSAAlgorithm.from_jwk(key_data),
                 algorithms=["RS256"],
                 audience="263659947191-e0sr8qg2pmofgb15h5lc1ihu7bhni26j.apps.googleusercontent.com"
