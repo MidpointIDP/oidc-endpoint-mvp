@@ -2,11 +2,52 @@ import json
 import logging
 import typing
 import uuid
-import authlib.jose
-import requests
+import joserfc
+import joserfc.jwk
+import joserfc.jwt
 
 _logger: logging.Logger = logging.getLogger(__name__)
 _logger.setLevel(logging.DEBUG)
+
+# 1. Get Google's Public Keys (JWKS)
+_jwks = json.loads(
+    """
+    {
+        "keys": [
+            {
+                "kid": "b3d95b95fa48d180b85ffe8082fcfa2174b04667",
+                "e": "AQAB",
+                "n": "3IUHipekMrYRlTvWbITRG64jOsCgvS0nGU85dmynPXY8o4nosgPtL_CCK3-f-EpoVGW1yFBhPUWf1xp6B6UIehsDdlko_Ey3gi_l5fDMWf-e2MOqFf6-4qCbGZdXarOws6eqQAcq_tSzLSPelqvbXnm1hKy-6iW2_6ql2lMQfb119-_ApUXizAHid7CnCa-XXDWdN3ke-uYciKeJ0d6tQn79N5h_HofB43XXk9wuu3_MOKiQaD-OfXGsWSGRG1fyvyGt8dfPJXqcMscWhg2pJIMlIoRPNopSMu8Pbl2K0SbFqG4UyhfnJz3Kgdo1depkKV5xcSfgEkSMIFXUUFN_hw",
+                "kty": "RSA",
+                "use": "sig",
+                "alg": "RS256"
+            },
+            {
+                "e": "AQAB",
+                "kid": "647014f9a4a4cbbb6e9aa1f9e30ee6cc70da742a",
+                "alg": "RS256",
+                "n": "wHjOqznUAbRNkltSyRKrUL1h0ITVFcRC34f-lnSjZHxlitPx5k77gUjSOcLPhDgmIJ37K25Ix0EdH3J5z6Diypte80ezobcbXruZOZV8a5pZM7dn94i3sf0_CTGN2vemG5ZfdqBliQRYoaMBTTx6sPn7WQ3RhhUwkIe5kc_sHbW2pGfJ6A2AfHM7aGhrhAcdaHmPUq7jwbF2bwOEoX3stOMVNBA2xpf9CIdflMKt8AX9uHTYjJNRpNr8qH8i5_KnQpPHG0zCROYQ7vFuL9lW_AULVOLRw4M-iM6Ea_oUwlAYIMO2rPSahLExAj-VW6ptqMHGIOJVfWuQgKGBalomqw",
+                "kty": "RSA",
+                "use": "sig"
+            }
+        ]
+    }
+    """
+)
+
+_key_set: joserfc.jwk.KeySet = joserfc.jwk.KeySet.import_key_set(_jwks)
+
+_claims_registry: joserfc.jwt.JWTClaimsRegistry = joserfc.jwt.JWTClaimsRegistry(
+    iss={
+        "essential": True,
+        "value": "https://accounts.google.com"
+    },
+
+    aud={
+        "essential": True,
+        "values": ["263659947191-e0sr8qg2pmofgb15h5lc1ihu7bhni26j.apps.googleusercontent.com", ]
+    },
+)
 
 
 def _create_lambda_function_response(status_code: int,
@@ -63,20 +104,22 @@ def oauth_callback_entry_point(event, _context):
 
     id_token: str = parsed_body['id_token']
 
-    # 1. Get Google's Public Keys (JWKS)
-    jwks_url = "https://www.googleapis.com/oauth2/v3/certs"
-    response = requests.get(jwks_url)
-    jwks = response.json()
-
     # Now we take the code and exchange it for ID/access tokens
     try:
-        validated_claims: dict[str, typing.Any] = jwt.decode(
-            id_token,
-            jwt.algorithms.RSAAlgorithm.from_jwk(key_data),
-            algorithms=["RS256"],
-            audience="263659947191-e0sr8qg2pmofgb15h5lc1ihu7bhni26j.apps.googleusercontent.com"
-        )
-    except jwt.InvalidTokenError:
+        decoded_token: joserfc.jwt.Token = joserfc.jwt.decode( id_token, _key_set, algorithms=["RS256"] )
+        # _logger.debug("Got past decode")
+
+        # Deep validate -- checks nbf, exp, iss, aud, throws exception if failed
+        token_claims: dict[str, typing.Any] = decoded_token.claims
+
+        # _logger.debug("extracted claims")
+
+        # _logger.debug("Calling validate")
+        _claims_registry.validate(token_claims)
+        # _logger.debug("Back from validate")
+
+    except Exception as e:
+        _logger.warning(f"Got exception while validating id_token: {e}")
         _logger.warning(f"Invalid token passed in body, rejecting login: {id_token}")
         return _create_lambda_function_response(
             401,
@@ -85,8 +128,8 @@ def oauth_callback_entry_point(event, _context):
             }
         )
 
-    _logger.info("ID token is valid with claims:")
-    _logger.info(validated_claims)
+    _logger.info("ID token passed both signature validation and claims validation with claims:")
+    _logger.info(token_claims)
 
     assigned_session_id: str = str(uuid.uuid4())
     _logger.info(f"Assigned session ID: {assigned_session_id}")
